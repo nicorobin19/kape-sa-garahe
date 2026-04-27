@@ -509,14 +509,14 @@ input, select, textarea {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .summary-card {
   background-color: var(--color-surface);
-  padding: 2rem;
+  padding: 1.25rem 1.5rem;
   border-radius: var(--radius);
   border: 1px solid var(--color-surface-hover);
   box-shadow: var(--shadow-sm);
@@ -525,14 +525,14 @@ input, select, textarea {
 }
 
 .summary-card .label {
-  font-size: 1rem;
+  font-size: 0.85rem;
   color: var(--color-text-muted);
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .summary-card .value {
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: var(--color-brand);
 }
