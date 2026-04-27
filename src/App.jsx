@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Coffee, Menu as MenuIcon, X, LayoutGrid, BarChart3,
-  History, Plus, Minus, Trash2, Edit, CheckCircle, TrendingUp
+  History, Plus, Minus, Trash2, Edit, CheckCircle, TrendingUp,
+  Sun, Moon, Award, Wallet
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { format, parseISO, isSameDay, startOfWeek, eachDayOfInterval, subWeeks, startOfMonth, eachWeekOfInterval, endOfMonth } from 'date-fns';
@@ -53,6 +54,52 @@ function LoginPage({ onEnter }) {
   );
 }
 
+function MenuCard({ item, cart, onAdd }) {
+  const [itemTemp, setItemTemp] = React.useState('Hot');
+  const [itemQty, setItemQty] = React.useState(1);
+  const qtyInCart = cart.filter(i => i.id === item.id).reduce((s, i) => s + i.qty, 0);
+  const btnStyle = (active) => ({
+    padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700,
+    border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+    backgroundColor: active ? 'var(--color-text)' : 'var(--color-surface-hover)',
+    color: active ? '#fff' : 'var(--color-text)',
+  });
+  return (
+    <div className="menu-list-card">
+      {/* Image + Name/Price */}
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+        <div className="menu-list-image">
+          {item.image_url
+            ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Coffee size={32} opacity={0.2} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--color-text)', marginBottom: '0.1rem' }}>{item.name}</div>
+          <div style={{ fontWeight: 800, color: 'var(--color-brand)', fontSize: '0.95rem' }}>₱{item.price}</div>
+        </div>
+      </div>
+
+      {/* Temp + Qty on same row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '0.35rem' }}>
+          <button onClick={() => setItemTemp('Hot')} style={btnStyle(itemTemp === 'Hot')}>Hot</button>
+          <button onClick={() => setItemTemp('Cold')} style={btnStyle(itemTemp === 'Cold')}>Cold</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button onClick={() => setItemQty(q => Math.max(1, q - 1))} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={11} /></button>
+          <span style={{ fontWeight: 800, fontSize: '0.9rem', minWidth: 16, textAlign: 'center' }}>{itemQty}</span>
+          <button onClick={() => setItemQty(q => q + 1)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={11} /></button>
+        </div>
+      </div>
+
+      {/* Add to Cart */}
+      <button onClick={() => { onAdd(item, itemQty, itemTemp); setItemQty(1); }} style={{ width: '100%', backgroundColor: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: '999px', padding: '0.55rem 0', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}>
+        {qtyInCart > 0 ? `Added (${qtyInCart})` : 'Add to Cart'}
+      </button>
+    </div>
+  );
+}
+
 function POSApp({ onLogout }) {
   const [menuItems, setMenuItems] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -64,13 +111,28 @@ function POSApp({ onLogout }) {
   // POS State
   const [activeCategory, setActiveCategory] = useState('All');
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [cashReceived, setCashReceived] = useState('');
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedTemp, setSelectedTemp] = useState('Hot');
+  const [selectedQty, setSelectedQty] = useState(1);
+
+  // Refund State
+  const [orderToRefund, setOrderToRefund] = useState(null);
 
   // Menu Management State
   const [editingMenuId, setEditingMenuId] = useState(null);
   const [menuForm, setMenuForm] = useState({ name: '', price: '', category: 'Coffee' });
+  const [menuImageFile, setMenuImageFile] = useState(null);
+  const [menuImagePreview, setMenuImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [mmActiveCategory, setMmActiveCategory] = useState('');
+  const [renamingCategory, setRenamingCategory] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   // Filters State
   const [historyFilterDate, setHistoryFilterDate] = useState('');
@@ -78,6 +140,19 @@ function POSApp({ onLogout }) {
 
   // Chart State
   const [chartMode, setChartMode] = useState('weekly');
+
+  // Theme
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('kape_theme') === 'dark');
+
+  // Expenses
+  const [expenses, setExpenses] = useState([]);
+  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '' });
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('kape_theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   // -------------------------------------------------------------
   // Supabase Fetch
@@ -88,8 +163,10 @@ function POSApp({ onLogout }) {
       supabase.from('menu_items').select('*').order('name'),
       supabase.from('orders').select('*').order('date', { ascending: false }),
     ]);
+    const { data: expensesData } = await supabase.from('expenses').select('*').order('date', { ascending: false });
     if (menuData) setMenuItems(menuData);
     if (ordersData) setOrders(ordersData);
+    if (expensesData) setExpenses(expensesData);
     setLoading(false);
   }, []);
 
@@ -103,8 +180,11 @@ function POSApp({ onLogout }) {
 
   const summaryDateObj = useMemo(() => summaryFilterDate ? parseISO(summaryFilterDate) : new Date(), [summaryFilterDate]);
   const summaryOrders = useMemo(() => orders.filter(o => isSameDay(parseISO(o.date), summaryDateObj)), [orders, summaryDateObj]);
-  const summaryRevenue = summaryOrders.reduce((sum, o) => sum + o.total, 0);
-  const summaryItemsSold = summaryOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.qty, 0), 0);
+  const summaryRevenue = summaryOrders.filter(o => !o.refunded).reduce((sum, o) => sum + o.total, 0);
+  const summaryItemsSold = summaryOrders.filter(o => !o.refunded).reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.qty, 0), 0);
+  const summaryCashRevenue = summaryOrders.filter(o => !o.refunded && (o.payment_method === 'Cash' || !o.payment_method)).reduce((sum, o) => sum + o.total, 0);
+  const summaryGCashRevenue = summaryOrders.filter(o => !o.refunded && o.payment_method === 'GCash').reduce((sum, o) => sum + o.total, 0);
+  const summaryExpenses = useMemo(() => expenses.filter(e => isSameDay(parseISO(e.date), summaryDateObj)).reduce((sum, e) => sum + e.amount, 0), [expenses, summaryDateObj]);
 
   const filteredHistoryOrders = useMemo(() => {
     if (!historyFilterDate) return orders;
@@ -118,17 +198,19 @@ function POSApp({ onLogout }) {
   // -------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------
-  const addToCart = (item) => {
+  const addToCart = (item, qty = 1, temp = 'Hot') => {
+    const cartId = `${item.id}-${temp}`;
+    const cartItem = { ...item, cartId, temp, name: `${item.name} (${temp})` };
     setCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...item, qty: 1 }];
+      const existing = prev.find(i => i.cartId === cartId);
+      if (existing) return prev.map(i => i.cartId === cartId ? { ...i, qty: i.qty + qty } : i);
+      return [...prev, { ...cartItem, qty }];
     });
   };
 
-  const updateCartQty = (id, delta) => {
+  const updateCartQty = (cartId, delta) => {
     setCart(prev =>
-      prev.map(item => item.id === id ? { ...item, qty: item.qty + delta } : item)
+      prev.map(item => item.cartId === cartId ? { ...item, qty: item.qty + delta } : item)
          .filter(item => item.qty > 0)
     );
   };
@@ -140,12 +222,25 @@ function POSApp({ onLogout }) {
       date: new Date().toISOString(),
       items: cart,
       total: cartTotal,
+      payment_method: paymentMethod,
+      refunded: false,
     };
     const { error } = await supabase.from('orders').insert([newOrder]);
     if (!error) {
       setOrders(prev => [newOrder, ...prev]);
       setCart([]);
+      setPaymentMethod('Cash');
+      setCashReceived('');
       setShowCheckoutModal(false);
+    }
+  };
+
+  const confirmRefund = async () => {
+    if (!orderToRefund) return;
+    const { error } = await supabase.from('orders').update({ refunded: true }).eq('id', orderToRefund.id);
+    if (!error) {
+      setOrders(prev => prev.map(o => o.id === orderToRefund.id ? { ...o, refunded: true } : o));
+      setOrderToRefund(null);
     }
   };
 
@@ -154,31 +249,74 @@ function POSApp({ onLogout }) {
     if (!menuForm.name || !menuForm.price || !menuForm.category) return;
     const price = parseFloat(menuForm.price);
 
+    let imageUrl = editingMenuId ? menuItems.find(m => m.id === editingMenuId)?.image_url : null;
+
+    if (menuImageFile) {
+      setUploadingImage(true);
+      const fileExt = menuImageFile.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('menu-images').upload(fileName, menuImageFile);
+      if (!uploadError) {
+        const { data } = supabase.storage.from('menu-images').getPublicUrl(fileName);
+        imageUrl = data.publicUrl;
+      }
+      setUploadingImage(false);
+    }
+
     if (editingMenuId) {
       const { error } = await supabase.from('menu_items')
-        .update({ name: menuForm.name, price, category: menuForm.category })
+        .update({ name: menuForm.name, price, category: menuForm.category, image_url: imageUrl })
         .eq('id', editingMenuId);
       if (!error) {
-        setMenuItems(prev => prev.map(m => m.id === editingMenuId ? { ...m, name: menuForm.name, price, category: menuForm.category } : m));
+        setMenuItems(prev => prev.map(m => m.id === editingMenuId ? { ...m, name: menuForm.name, price, category: menuForm.category, image_url: imageUrl } : m));
         setEditingMenuId(null);
       }
     } else {
-      const newItem = { id: uuidv4(), name: menuForm.name, price, category: menuForm.category };
+      const newItem = { id: uuidv4(), name: menuForm.name, price, category: menuForm.category, image_url: imageUrl };
       const { error } = await supabase.from('menu_items').insert([newItem]);
       if (error) { alert('Error saving item: ' + error.message); return; }
       setMenuItems(prev => [...prev, newItem]);
     }
     setMenuForm({ name: '', price: '', category: dropdownCategories[0] || 'Coffee' });
+    setMenuImageFile(null);
+    setMenuImagePreview(null);
     setIsAddingNewCategory(false);
   };
 
   const editMenuItem = (item) => {
     setMenuForm({ name: item.name, price: item.price, category: item.category });
+    setMenuImagePreview(item.image_url || null);
+    setMenuImageFile(null);
     setIsAddingNewCategory(false);
     setEditingMenuId(item.id);
   };
 
   const [orderToDelete, setOrderToDelete] = useState(null);
+
+  const saveExpense = async (e) => {
+    e.preventDefault();
+    if (!expenseForm.description || !expenseForm.amount) return;
+    const newExpense = { id: uuidv4(), date: new Date().toISOString(), description: expenseForm.description, amount: parseFloat(expenseForm.amount) };
+    const { error } = await supabase.from('expenses').insert([newExpense]);
+    if (!error) {
+      setExpenses(prev => [newExpense, ...prev]);
+      setExpenseForm({ description: '', amount: '' });
+    }
+  };
+
+  const deleteExpense = async () => {
+    if (!expenseToDelete) return;
+    const { error } = await supabase.from('expenses').delete().eq('id', expenseToDelete.id);
+    if (!error) {
+      setExpenses(prev => prev.filter(e => e.id !== expenseToDelete.id));
+      setExpenseToDelete(null);
+    }
+  };
+
+  const updatePaymentMethod = async (order, method) => {
+    const { error } = await supabase.from('orders').update({ payment_method: method }).eq('id', order.id);
+    if (!error) setOrders(prev => prev.map(o => o.id === order.id ? { ...o, payment_method: method } : o));
+  };
 
   const deleteOrder = async () => {
     if (!orderToDelete) return;
@@ -199,10 +337,23 @@ function POSApp({ onLogout }) {
 
   const confirmDeleteCategory = async () => {
     if (!categoryToDelete) return;
-    const { error } = await supabase.from('menu_items').delete().eq('category', categoryToDelete);
+    // Move items to Uncategorized instead of deleting them
+    const { error } = await supabase.from('menu_items').update({ category: 'Uncategorized' }).eq('category', categoryToDelete);
     if (!error) {
-      setMenuItems(prev => prev.filter(m => m.category !== categoryToDelete));
+      setMenuItems(prev => prev.map(m => m.category === categoryToDelete ? { ...m, category: 'Uncategorized' } : m));
+      if (mmActiveCategory === categoryToDelete) setMmActiveCategory('');
       setCategoryToDelete(null);
+    }
+  };
+
+  const confirmRenameCategory = async () => {
+    if (!renamingCategory || !renameValue.trim()) return;
+    const { error } = await supabase.from('menu_items').update({ category: renameValue.trim() }).eq('category', renamingCategory);
+    if (!error) {
+      setMenuItems(prev => prev.map(m => m.category === renamingCategory ? { ...m, category: renameValue.trim() } : m));
+      if (mmActiveCategory === renamingCategory) setMmActiveCategory(renameValue.trim());
+      setRenamingCategory(null);
+      setRenameValue('');
     }
   };
 
@@ -231,27 +382,10 @@ function POSApp({ onLogout }) {
         {filteredMenuItems.length === 0 ? (
           <p className="text-muted text-center py-8">No menu items found in this category.</p>
         ) : (
-          <div className="menu-grid">
-            {filteredMenuItems.map(item => {
-              const qtyInCart = cart.find(i => i.id === item.id)?.qty || 0;
-              return (
-                <div key={item.id} className="menu-item-card" onClick={() => addToCart(item)}>
-                  {qtyInCart > 0 && <div className="menu-item-badge">{qtyInCart}</div>}
-                  <div className="menu-item-placeholder">
-                    <Coffee size={64} opacity={0.2} />
-                  </div>
-                  <div className="menu-item-details">
-                    <div>
-                      <div className="menu-item-name">{item.name}</div>
-                      <div className="menu-item-price">₱{item.price}</div>
-                    </div>
-                    <button className={`menu-add-btn ${qtyInCart > 0 ? 'active' : ''}`}>
-                      <Plus size={20} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="menu-list">
+            {filteredMenuItems.map(item => (
+              <MenuCard key={item.id} item={item} cart={cart} onAdd={addToCart} />
+            ))}
           </div>
         )}
       </div>
@@ -269,18 +403,20 @@ function POSApp({ onLogout }) {
             </p>
           ) : (
             cart.map(item => (
-              <div key={item.id} className="cart-item">
-                <div className="cart-item-image-placeholder">
-                  <Coffee size={24} />
+              <div key={item.cartId} className="cart-item">
+                <div className="cart-item-image-placeholder" style={{ overflow: 'hidden', borderRadius: 12 }}>
+                  {item.image_url
+                    ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Coffee size={24} />}
                 </div>
                 <div className="cart-item-info">
                   <div className="cart-item-name">{item.name}</div>
                   <div className="cart-item-price">₱{item.price} x {item.qty}</div>
                 </div>
                 <div className="cart-item-controls">
-                  <button className="cart-qty-btn" onClick={() => updateCartQty(item.id, -1)}><Minus size={14} /></button>
+                  <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, -1)}><Minus size={14} /></button>
                   <span className="cart-qty">{item.qty}</span>
-                  <button className="cart-qty-btn" onClick={() => addToCart(item)}><Plus size={14} /></button>
+                  <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, 1)}><Plus size={14} /></button>
                 </div>
               </div>
             ))
@@ -311,18 +447,39 @@ function POSApp({ onLogout }) {
                 <span style={{ fontWeight: 600 }}>Total Items:</span>
                 <span className="text-muted font-bold">{cart.reduce((s, i) => s + i.qty, 0)} items</span>
               </div>
-              <div className="flex justify-between items-center" style={{ paddingBottom: '0.75rem', borderBottom: '1px solid var(--color-surface-hover)' }}>
+              <div className="flex justify-between items-center" style={{ paddingBottom: '0.75rem', borderBottom: '1px solid var(--color-surface-hover)', marginBottom: '0.75rem' }}>
                 <span style={{ fontWeight: 600 }}>Total Due:</span>
                 <span className="text-brand" style={{ fontSize: '1.5rem', fontWeight: 800 }}>₱{cartTotal.toLocaleString()}</span>
               </div>
+              <div>
+                <span style={{ fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Payment Method:</span>
+                <div className="flex gap-2">
+                  {['Cash', 'GCash'].map(method => (
+                    <button key={method} type="button" className="btn flex-1" style={{ backgroundColor: paymentMethod === method ? 'var(--color-brand)' : 'var(--color-surface-hover)', color: paymentMethod === method ? '#fff' : 'var(--color-text)', fontWeight: 700 }} onClick={() => { setPaymentMethod(method); setCashReceived(''); }}>
+                      {method === 'Cash' ? '💵' : '📱'} {method}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {paymentMethod === 'Cash' && (
+                <div style={{ marginTop: '1rem' }}>
+                  <span style={{ fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Cash Received:</span>
+                  <input type="number" className="form-control" placeholder={`Minimum ₱${cartTotal.toLocaleString()}`} value={cashReceived} min={cartTotal} onChange={e => setCashReceived(e.target.value)} />
+                  {cashReceived !== '' && parseFloat(cashReceived) >= cartTotal && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', borderRadius: '12px', backgroundColor: 'var(--color-surface-hover)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600 }}>Change:</span>
+                      <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--color-brand)' }}>₱{(parseFloat(cashReceived) - cartTotal).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {cashReceived !== '' && parseFloat(cashReceived) < cartTotal && (
+                    <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>Amount is less than the total.</p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="modal-actions flex gap-2">
-              <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setShowCheckoutModal(false)}>
-                Cancel
-              </button>
-              <button className="btn btn-primary w-full" onClick={confirmCheckout}>
-                Confirm Order
-              </button>
+              <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setShowCheckoutModal(false)}>Cancel</button>
+              <button className="btn btn-primary w-full" onClick={confirmCheckout} disabled={paymentMethod === 'Cash' && (cashReceived === '' || parseFloat(cashReceived) < cartTotal)}>Confirm Order</button>
             </div>
           </div>
         </div>
@@ -331,110 +488,146 @@ function POSApp({ onLogout }) {
   );
 
   const renderMenuManagement = () => (
-    <div className="content-wrapper">
-      <h2 className="title mb-4">Menu Management</h2>
+    <div style={{ padding: '1.5rem', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '1rem' }}>
+        <h2 className="title" style={{ fontSize: '1.3rem', marginBottom: '0.15rem' }}>Menu Management</h2>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>Organize your offerings and update item availability.</p>
+      </div>
 
-      {/* Category Pills */}
-      <div className="mm-category-pills">
-        {dropdownCategories.map(cat => (
-          <div key={cat} className="mm-category-pill">
-            <span>{cat}</span>
-            <span className="mm-category-count">{menuItems.filter(m => m.category === cat).length}</span>
-            <button className="mm-category-delete" onClick={() => setCategoryToDelete(cat)} title="Delete category">
-              <X size={12} />
-            </button>
-          </div>
-        ))}
+      {/* Category Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem', flexShrink: 0 }}>
+        <button onClick={() => setMmActiveCategory('')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+          padding: '0.45rem 1rem', borderRadius: '999px', fontWeight: 700, fontSize: '0.85rem',
+          border: '1.5px solid var(--color-border)', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
+          backgroundColor: mmActiveCategory === '' ? 'var(--color-brand)' : 'var(--color-surface)',
+          color: mmActiveCategory === '' ? '#fff' : 'var(--color-text)',
+        }}>All <span style={{ backgroundColor: mmActiveCategory === '' ? 'rgba(255,255,255,0.25)' : 'var(--color-surface-hover)', color: mmActiveCategory === '' ? '#fff' : 'var(--color-brand)', borderRadius: '999px', padding: '0.05rem 0.45rem', fontSize: '0.75rem', fontWeight: 800 }}>{menuItems.length}</span></button>
+        {dropdownCategories.map(cat => {
+          const count = menuItems.filter(m => m.category === cat).length;
+          const isActive = mmActiveCategory === cat;
+          return (
+            <div key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: '0', borderRadius: '999px', border: `1.5px solid ${isActive ? 'var(--color-brand)' : 'var(--color-border)'}`, overflow: 'hidden', backgroundColor: isActive ? 'var(--color-brand)' : 'var(--color-surface)', transition: 'all 0.15s' }}>
+              <button onClick={() => setMmActiveCategory(cat)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.75rem 0.45rem 1rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap', background: 'none', border: 'none', color: isActive ? '#fff' : 'var(--color-text)' }}>
+                {cat}
+                <span style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : 'var(--color-surface-hover)', color: isActive ? '#fff' : 'var(--color-brand)', borderRadius: '999px', padding: '0.05rem 0.45rem', fontSize: '0.75rem', fontWeight: 800 }}>{count}</span>
+              </button>
+              <button onClick={e => { e.stopPropagation(); setRenamingCategory(cat); setRenameValue(cat); }} title="Rename" style={{ padding: '0.45rem 0.35rem', background: 'none', border: 'none', borderLeft: `1px solid ${isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)'}`, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Edit size={11} /></button>
+              <button onClick={e => { e.stopPropagation(); setCategoryToDelete(cat); }} title="Delete category" style={{ padding: '0.45rem 0.5rem 0.45rem 0.35rem', background: 'none', border: 'none', color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={11} /></button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Two Column Layout */}
-      <div className="mm-layout">
+      <div className="mm-layout" style={{ flex: 1, minHeight: 0 }}>
 
         {/* Left: Form */}
-        <div className="card mm-form-card">
-          <h3 className="font-bold mb-4" style={{ fontSize: '1.1rem', color: editingMenuId ? 'var(--color-brand)' : 'var(--color-text)' }}>
-            {editingMenuId ? '✏️ Editing Item' : '➕ Add New Item'}
-          </h3>
-          <form onSubmit={saveMenuItem} className="flex flex-col gap-4">
+        <div className="card mm-form-card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: 'var(--color-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Plus size={16} color="#fff" />
+            </div>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: editingMenuId ? 'var(--color-brand)' : 'var(--color-text)' }}>
+              {editingMenuId ? 'Edit Item' : 'Add New Item'}
+            </span>
+          </div>
+          <form onSubmit={saveMenuItem} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label className="form-label">Item Name</label>
-              <input type="text" className="form-control" value={menuForm.name} onChange={e => setMenuForm({ ...menuForm, name: e.target.value })} placeholder="e.g. Mocha Frappe" required />
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Item Name</label>
+              <input type="text" className="form-control" value={menuForm.name} onChange={e => setMenuForm({ ...menuForm, name: e.target.value })} placeholder="e.g. Mocha Frappe" required style={{ fontSize: '0.9rem', padding: '0.65rem 0.85rem' }} />
             </div>
             <div>
-              <label className="form-label">Price (₱)</label>
-              <input type="number" className="form-control" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} placeholder="0.00" min="1" required />
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Price (₱)</label>
+              <input type="number" className="form-control" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} placeholder="0.00" min="1" required style={{ fontSize: '0.9rem', padding: '0.65rem 0.85rem' }} />
             </div>
             <div>
-              <label className="form-label">Category</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Category</label>
               {!isAddingNewCategory ? (
-                <select
-                  className="form-control"
-                  value={menuForm.category}
-                  onChange={e => {
-                    if (e.target.value === 'ADD_NEW') {
-                      setIsAddingNewCategory(true);
-                      setMenuForm({ ...menuForm, category: '' });
-                    } else {
-                      setMenuForm({ ...menuForm, category: e.target.value });
-                    }
-                  }}
-                  required
-                >
-                  <option value="" disabled>Select a category</option>
-                  {dropdownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                  <option value="ADD_NEW" style={{ fontWeight: 'bold', color: 'var(--color-brand)' }}>+ Add new category...</option>
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <button type="button" onClick={() => setShowCategoryDropdown(d => !d)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.85rem', borderRadius: 12, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <span>{menuForm.category || 'Select a category'}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>▼</span>
+                  </button>
+                  {showCategoryDropdown && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, boxShadow: 'var(--shadow-md)', zIndex: 50, overflow: 'hidden' }}>
+                      {dropdownCategories.map(c => (
+                        <button key={c} type="button" onClick={() => { setMenuForm({ ...menuForm, category: c }); setShowCategoryDropdown(false); }} style={{ width: '100%', textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.9rem', fontWeight: menuForm.category === c ? 700 : 500, color: menuForm.category === c ? 'var(--color-brand)' : 'var(--color-text)', backgroundColor: menuForm.category === c ? 'rgba(13,92,49,0.06)' : 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          {c}
+                          {menuForm.category === c && <span style={{ color: 'var(--color-brand)', fontSize: '0.8rem' }}>✓</span>}
+                        </button>
+                      ))}
+                      <div style={{ borderTop: '1px solid var(--color-border)' }}>
+                        <button type="button" onClick={() => { setIsAddingNewCategory(true); setMenuForm({ ...menuForm, category: '' }); setShowCategoryDropdown(false); }} style={{ width: '100%', textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-brand)', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}>+ Add new category...</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="flex gap-2">
-                  <input type="text" className="form-control" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} placeholder="Type new category..." required autoFocus />
-                  <button type="button" className="btn" style={{ backgroundColor: 'var(--color-surface-hover)', padding: '0.75rem 1rem' }} onClick={() => { setIsAddingNewCategory(false); setMenuForm({ ...menuForm, category: dropdownCategories[0] || 'Coffee' }); }}>
-                    Cancel
-                  </button>
+                  <input type="text" className="form-control" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} placeholder="New category name..." required autoFocus style={{ fontSize: '0.9rem', padding: '0.65rem 0.85rem' }} />
+                  <button type="button" className="btn" style={{ backgroundColor: 'var(--color-surface-hover)', padding: '0.65rem 1rem', fontSize: '0.85rem' }} onClick={() => { setIsAddingNewCategory(false); setMenuForm({ ...menuForm, category: dropdownCategories[0] || 'Coffee' }); setShowCategoryDropdown(false); }}>Cancel</button>
                 </div>
               )}
             </div>
-            <div className="flex gap-2 mt-2">
-              <button type="submit" className="btn btn-primary flex-1">
-                {editingMenuId ? 'Update Item' : 'Save Item'}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Item Image</label>
+              <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', border: '1.5px dashed var(--color-border)', borderRadius: 12, padding: '1.25rem', cursor: 'pointer', backgroundColor: 'var(--color-bg)', transition: 'border-color 0.2s' }}>
+                {menuImagePreview
+                  ? <img src={menuImagePreview} alt="Preview" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 10 }} />
+                  : <>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: 'var(--color-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>📷</div>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>Click to upload image</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>PNG, JPG up to 5MB</span>
+                    </>}
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const file = e.target.files[0]; if (file) { setMenuImageFile(file); setMenuImagePreview(URL.createObjectURL(file)); } }} />
+              </label>
+              {menuImagePreview && <button type="button" onClick={() => { setMenuImageFile(null); setMenuImagePreview(null); }} style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--color-danger)', fontWeight: 600 }}>Remove image</button>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <button type="submit" disabled={uploadingImage} style={{ flex: 1, backgroundColor: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: 10, padding: '0.75rem', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+                {uploadingImage ? 'Uploading...' : editingMenuId ? 'Update Item' : 'Save Item'}
               </button>
               {editingMenuId && (
-                <button type="button" className="btn" style={{ backgroundColor: 'var(--color-surface-hover)' }} onClick={() => { setEditingMenuId(null); setMenuForm({ name: '', price: '', category: dropdownCategories[0] || 'Coffee' }); setIsAddingNewCategory(false); }}>
-                  Cancel
-                </button>
+                <button type="button" style={{ backgroundColor: 'var(--color-surface-hover)', border: 'none', borderRadius: 10, padding: '0.75rem 1rem', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', color: 'var(--color-text)' }} onClick={() => { setEditingMenuId(null); setMenuForm({ name: '', price: '', category: dropdownCategories[0] || 'Coffee' }); setMenuImageFile(null); setMenuImagePreview(null); setIsAddingNewCategory(false); }}>Cancel</button>
               )}
             </div>
           </form>
         </div>
 
-        {/* Right: Inventory grouped by category */}
+        {/* Right: Flat item list filtered by mmActiveCategory */}
         <div className="mm-inventory">
           {menuItems.length === 0 ? (
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem', color: 'var(--color-text-muted)' }}>
               <Coffee size={48} opacity={0.2} />
-              <p className="text-muted text-center">No items yet. Add one from the form.</p>
+              <p>No items yet. Add one from the form.</p>
             </div>
           ) : (
-            dropdownCategories.filter(cat => menuItems.some(m => m.category === cat)).map(cat => (
-              <div key={cat} className="card mm-group-card">
-                <div className="mm-group-header">
-                  <span className="mm-group-title">{cat}</span>
-                  <span className="mm-group-count">{menuItems.filter(m => m.category === cat).length} items</span>
+            dropdownCategories
+              .filter(cat => mmActiveCategory === '' ? menuItems.some(m => m.category === cat) : cat === mmActiveCategory && menuItems.some(m => m.category === cat))
+              .map(cat => (
+              <div key={cat} className="card" style={{ padding: '1rem 1.25rem', marginBottom: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', paddingBottom: '0.6rem', borderBottom: '1px solid var(--color-border)' }}>
+                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-brand)' }}>{cat} Category</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>({menuItems.filter(m => m.category === cat).length})</span>
                 </div>
-                <div className="mm-item-list">
-                  {menuItems.filter(m => m.category === cat).map(item => (
-                    <div key={item.id} className="mm-item-row">
-                      <div className="mm-item-icon"><Coffee size={18} /></div>
-                      <div className="mm-item-info">
-                        <span className="mm-item-name">{item.name}</span>
-                        <span className="mm-item-price">₱{item.price}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button className="btn-icon" onClick={() => editMenuItem(item)} title="Edit"><Edit size={15} /></button>
-                        <button className="btn-icon" onClick={() => setItemToDelete(item)} title="Delete"><Trash2 size={15} className="text-danger" /></button>
-                      </div>
+                {menuItems.filter(m => m.category === cat).map(item => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0', borderBottom: '1px solid var(--color-surface-hover)' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 10, overflow: 'hidden', flexShrink: 0, backgroundColor: 'var(--color-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.image_url ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Coffee size={18} color="var(--color-brand)" opacity={0.5} />}
                     </div>
-                  ))}
-                </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-text)' }}>{item.name}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{item.category}</div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-brand)', minWidth: 60, textAlign: 'right' }}>₱{item.price}</div>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button className="btn-icon" onClick={() => editMenuItem(item)} title="Edit"><Edit size={15} /></button>
+                      <button className="btn-icon" onClick={() => setItemToDelete(item)} title="Delete"><Trash2 size={15} className="text-danger" /></button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))
           )}
@@ -457,19 +650,35 @@ function POSApp({ onLogout }) {
           </div>
         </div>
       )}
+      {renamingCategory && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2 className="modal-title">Rename Category</h2>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.95rem', marginBottom: '1rem' }}>Rename <strong>{renamingCategory}</strong> to:</p>
+              <input className="form-control" value={renameValue} onChange={e => setRenameValue(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && confirmRenameCategory()} />
+              <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>All {menuItems.filter(m => m.category === renamingCategory).length} item(s) will be updated.</p>
+            </div>
+            <div className="modal-actions flex gap-2">
+              <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => { setRenamingCategory(null); setRenameValue(''); }}>Cancel</button>
+              <button className="btn btn-primary w-full" onClick={confirmRenameCategory}>Rename</button>
+            </div>
+          </div>
+        </div>
+      )}
       {categoryToDelete && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h2 className="modal-title text-danger">Delete Category</h2>
             <div className="modal-body">
-              <p style={{ fontSize: '1.05rem' }}>Are you sure you want to delete <strong>{categoryToDelete}</strong>?</p>
+              <p style={{ fontSize: '1.05rem' }}>Delete the <strong>{categoryToDelete}</strong> category?</p>
               <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                This will also delete all <strong>{menuItems.filter(m => m.category === categoryToDelete).length} item(s)</strong> under this category. This cannot be undone.
+                The <strong>{menuItems.filter(m => m.category === categoryToDelete).length} item(s)</strong> in this category will be moved to <strong>Uncategorized</strong> — they will not be deleted.
               </p>
             </div>
             <div className="modal-actions flex gap-2">
               <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setCategoryToDelete(null)}>Cancel</button>
-              <button className="btn btn-danger w-full" onClick={confirmDeleteCategory}>Delete</button>
+              <button className="btn btn-danger w-full" onClick={confirmDeleteCategory}>Delete Category</button>
             </div>
           </div>
         </div>
@@ -506,6 +715,18 @@ function POSApp({ onLogout }) {
           <div className="label">Processed Orders</div>
           <div className="value" style={{ color: 'var(--color-text)' }}>{summaryOrders.length}</div>
         </div>
+        <div className="summary-card">
+          <div className="label">Net Profit</div>
+          <div className="value" style={{ color: summaryRevenue - summaryExpenses >= 0 ? 'var(--color-brand)' : 'var(--color-danger)' }}>₱{(summaryRevenue - summaryExpenses).toLocaleString()}</div>
+        </div>
+        <div className="summary-card">
+          <div className="label">💵 Cash on Hand</div>
+          <div className="value" style={{ color: 'var(--color-text)' }}>₱{summaryCashRevenue.toLocaleString()}</div>
+        </div>
+        <div className="summary-card">
+          <div className="label">📱 GCash Balance</div>
+          <div className="value" style={{ color: '#0070f3' }}>₱{summaryGCashRevenue.toLocaleString()}</div>
+        </div>
       </div>
 
       <div className="card" style={{ padding: '1.5rem' }}>
@@ -519,17 +740,31 @@ function POSApp({ onLogout }) {
                 <tr>
                   <th>Time of Order</th>
                   <th>Purchased Items</th>
+                  <th className="text-center">Payment</th>
                   <th className="text-right">Order Total</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {summaryOrders.map(order => (
-                  <tr key={order.id}>
+                  <tr key={order.id} style={{ opacity: order.refunded ? 0.5 : 1 }}>
                     <td className="text-muted font-bold">{format(parseISO(order.date), 'h:mm a')}</td>
                     <td style={{ fontSize: '0.95rem' }}>{order.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</td>
-                    <td className="text-right font-bold text-brand">₱{order.total.toLocaleString()}</td>
-                    <td className="text-right">
+                    <td className="text-center">
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px', backgroundColor: order.payment_method === 'GCash' ? '#e0f0ff' : '#e8f5e9', color: order.payment_method === 'GCash' ? '#0070f3' : '#2e7d32' }}>
+                        {order.payment_method === 'GCash' ? '📱' : '💵'} {order.payment_method || 'Cash'}
+                      </span>
+                      {!order.refunded && (
+                        <button onClick={() => updatePaymentMethod(order, order.payment_method === 'GCash' ? 'Cash' : 'GCash')} style={{ display: 'block', margin: '0.25rem auto 0', fontSize: '0.7rem', color: 'var(--color-text-muted)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                          switch
+                        </button>
+                      )}
+                    </td>
+                    <td className="text-right font-bold text-brand">
+                      {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : `₱${order.total.toLocaleString()}`}
+                    </td>
+                    <td className="text-right" style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                      {!order.refunded && <button className="btn-icon" onClick={() => setOrderToRefund(order)} title="Refund"><img src="/refund.png" alt="Refund" style={{ width: 20, height: 20 }} /></button>}
                       <button className="btn-icon" onClick={() => setOrderToDelete(order)} title="Delete"><Trash2 size={16} className="text-danger" /></button>
                     </td>
                   </tr>
@@ -567,6 +802,7 @@ function POSApp({ onLogout }) {
                   <th>Date & Time</th>
                   <th>Order Details</th>
                   <th className="text-center">Total Quantity</th>
+                  <th className="text-center">Payment</th>
                   <th className="text-right">Revenue</th>
                   <th></th>
                 </tr>
@@ -575,7 +811,7 @@ function POSApp({ onLogout }) {
                 {filteredHistoryOrders.map(order => {
                   const totalItems = order.items.reduce((s, i) => s + i.qty, 0);
                   return (
-                    <tr key={order.id}>
+                    <tr key={order.id} style={{ opacity: order.refunded ? 0.5 : 1 }}>
                       <td>
                         <div className="font-bold">{format(parseISO(order.date), 'MMM d, yyyy')}</div>
                         <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{format(parseISO(order.date), 'h:mm a')}</div>
@@ -591,8 +827,21 @@ function POSApp({ onLogout }) {
                         </ul>
                       </td>
                       <td className="text-center font-bold">{totalItems}</td>
-                      <td className="text-right font-bold text-brand" style={{ fontSize: '1.1rem' }}>₱{order.total.toLocaleString()}</td>
-                      <td className="text-right">
+                      <td className="text-center">
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px', backgroundColor: order.payment_method === 'GCash' ? '#e0f0ff' : '#e8f5e9', color: order.payment_method === 'GCash' ? '#0070f3' : '#2e7d32' }}>
+                          {order.payment_method === 'GCash' ? '📱' : '💵'} {order.payment_method || 'Cash'}
+                        </span>
+                        {!order.refunded && (
+                          <button onClick={() => updatePaymentMethod(order, order.payment_method === 'GCash' ? 'Cash' : 'GCash')} style={{ display: 'block', margin: '0.25rem auto 0', fontSize: '0.7rem', color: 'var(--color-text-muted)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                            switch
+                          </button>
+                        )}
+                      </td>
+                      <td className="text-right font-bold text-brand" style={{ fontSize: '1.1rem' }}>
+                        {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : `₱${order.total.toLocaleString()}`}
+                      </td>
+                      <td className="text-right" style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                        {!order.refunded && <button className="btn-icon" onClick={() => setOrderToRefund(order)} title="Refund"><img src="/refund.png" alt="Refund" style={{ width: 20, height: 20 }} /></button>}
                         <button className="btn-icon" onClick={() => setOrderToDelete(order)} title="Delete"><Trash2 size={16} className="text-danger" /></button>
                       </td>
                     </tr>
@@ -610,17 +859,18 @@ function POSApp({ onLogout }) {
   // Chart Data
   // -------------------------------------------------------------
   const chartData = useMemo(() => {
+    const activeOrders = orders.filter(o => !o.refunded);
     if (chartMode === 'weekly') {
       const days = eachDayOfInterval({ start: startOfWeek(new Date(), { weekStartsOn: 1 }), end: new Date() });
       return days.map(day => ({
         label: format(day, 'EEE'),
-        revenue: orders.filter(o => isSameDay(parseISO(o.date), day)).reduce((s, o) => s + o.total, 0),
+        revenue: activeOrders.filter(o => isSameDay(parseISO(o.date), day)).reduce((s, o) => s + o.total, 0),
       }));
     } else {
       const weeks = eachWeekOfInterval({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) }, { weekStartsOn: 1 });
       return weeks.map((weekStart, i) => ({
         label: `Wk ${i + 1}`,
-        revenue: orders.filter(o => {
+        revenue: activeOrders.filter(o => {
           const d = parseISO(o.date);
           const wEnd = new Date(weekStart); wEnd.setDate(wEnd.getDate() + 6);
           return d >= weekStart && d <= wEnd;
@@ -650,12 +900,135 @@ function POSApp({ onLogout }) {
     </div>
   );
 
+  const [bestSellerPeriod, setBestSellerPeriod] = useState('alltime');
+
+  const renderBestSellers = () => {
+    const now = new Date();
+    const filteredOrders = orders.filter(o => {
+      if (o.refunded) return false;
+      const d = parseISO(o.date);
+      if (bestSellerPeriod === 'today') return isSameDay(d, now);
+      if (bestSellerPeriod === 'week') return d >= startOfWeek(now, { weekStartsOn: 1 });
+      if (bestSellerPeriod === 'month') return d >= startOfMonth(now);
+      return true;
+    });
+    const tally = {};
+    filteredOrders.forEach(o => o.items.forEach(i => {
+      tally[i.name] = (tally[i.name] || 0) + i.qty;
+    }));
+    const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+    const max = sorted[0]?.[1] || 1;
+    const periodLabels = { today: 'Today', week: 'This Week', month: 'This Month', alltime: 'All Time' };
+    return (
+      <div className="content-wrapper">
+        <h2 className="title mb-4">Best Sellers</h2>
+        <div className="flex gap-2 mb-4">
+          {Object.entries(periodLabels).map(([key, label]) => (
+            <button
+              key={key}
+              className="btn"
+              style={{
+                backgroundColor: bestSellerPeriod === key ? 'var(--color-brand)' : 'var(--color-surface-hover)',
+                color: bestSellerPeriod === key ? '#fff' : 'var(--color-text)',
+                fontWeight: 700,
+              }}
+              onClick={() => setBestSellerPeriod(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="card" style={{ padding: '1.5rem' }}>
+          {sorted.length === 0 ? (
+            <p className="text-muted text-center py-4">No sales data for {periodLabels[bestSellerPeriod].toLowerCase()}.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {sorted.map(([name, qty], i) => (
+                <div key={name}>
+                  <div className="flex justify-between items-center" style={{ marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                      <span style={{ color: i === 0 ? '#f59e0b' : i === 1 ? '#9ca3af' : i === 2 ? '#b45309' : 'var(--color-text-muted)', marginRight: '0.5rem', fontWeight: 800 }}>#{i + 1}</span>
+                      {name}
+                    </span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-brand)' }}>{qty} sold</span>
+                  </div>
+                  <div style={{ height: '8px', borderRadius: '999px', backgroundColor: 'var(--color-surface-hover)' }}>
+                    <div style={{ height: '100%', borderRadius: '999px', width: `${(qty / max) * 100}%`, backgroundColor: i === 0 ? '#f59e0b' : 'var(--color-brand)', transition: 'width 0.4s' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderExpenses = () => (
+    <div className="content-wrapper">
+      <h2 className="title mb-4">Expense Tracker</h2>
+      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+        <h3 className="font-bold mb-4" style={{ fontSize: '1.1rem' }}>Log Expense</h3>
+        <form onSubmit={saveExpense} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <input className="form-control" style={{ flex: 2, minWidth: '160px' }} placeholder="Description (e.g. Coffee beans)" value={expenseForm.description} onChange={e => setExpenseForm({ ...expenseForm, description: e.target.value })} required />
+          <input className="form-control" style={{ flex: 1, minWidth: '120px' }} type="number" placeholder="Amount (₱)" min="1" value={expenseForm.amount} onChange={e => setExpenseForm({ ...expenseForm, amount: e.target.value })} required />
+          <button type="submit" className="btn btn-primary">Add</button>
+        </form>
+      </div>
+      <div className="card" style={{ padding: '1.5rem' }}>
+        {expenses.length === 0 ? (
+          <p className="text-muted text-center py-4">No expenses logged yet.</p>
+        ) : (
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Description</th>
+                  <th className="text-right">Amount</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map(e => (
+                  <tr key={e.id}>
+                    <td className="text-muted font-bold" style={{ fontSize: '0.9rem' }}>{format(parseISO(e.date), 'MMM d, yyyy h:mm a')}</td>
+                    <td>{e.description}</td>
+                    <td className="text-right font-bold text-danger">₱{e.amount.toLocaleString()}</td>
+                    <td className="text-right"><button className="btn-icon" onClick={() => setExpenseToDelete(e)}><Trash2 size={16} className="text-danger" /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {expenseToDelete && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2 className="modal-title text-danger">Delete Expense</h2>
+            <div className="modal-body">
+              <p>Delete <strong>{expenseToDelete.description}</strong> — ₱{expenseToDelete.amount.toLocaleString()}?</p>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>This cannot be undone.</p>
+            </div>
+            <div className="modal-actions flex gap-2">
+              <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setExpenseToDelete(null)}>Cancel</button>
+              <button className="btn btn-danger w-full" onClick={deleteExpense}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const SIDEBAR_ITEMS = [
     { id: 'pos', icon: <LayoutGrid size={20} />, label: 'POS / Order' },
     { id: 'menu', icon: <Coffee size={20} />, label: 'Menu Management' },
     { id: 'daily', icon: <BarChart3 size={20} />, label: 'Sales Summary' },
     { id: 'history', icon: <History size={20} />, label: 'Historical Records' },
     { id: 'chart', icon: <TrendingUp size={20} />, label: 'Sales Chart' },
+    { id: 'bestsellers', icon: <Award size={20} />, label: 'Best Sellers' },
+    { id: 'expenses', icon: <Wallet size={20} />, label: 'Expenses' },
   ];
 
   if (loading) return (
@@ -697,9 +1070,14 @@ function POSApp({ onLogout }) {
           ))}
         </nav>
 
-        <button className="nav-item" style={{ color: 'var(--color-danger)', marginTop: 'auto' }} onClick={onLogout}>
-          <X size={20} /> Logout
-        </button>
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button className="nav-item" onClick={() => setDarkMode(d => !d)} style={{ color: 'var(--color-text-muted)' }}>
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />} {darkMode ? 'Light Mode' : 'Dark Mode'}
+          </button>
+          <button className="nav-item" style={{ color: 'var(--color-danger)' }} onClick={onLogout}>
+            <X size={20} /> Logout
+          </button>
+        </div>
       </aside>
 
       <main className="main-content">
@@ -708,6 +1086,8 @@ function POSApp({ onLogout }) {
         {currentView === 'daily' && renderDailySales()}
         {currentView === 'history' && renderSalesHistory()}
         {currentView === 'chart' && renderChart()}
+        {currentView === 'bestsellers' && renderBestSellers()}
+        {currentView === 'expenses' && renderExpenses()}
       </main>
 
       {orderToDelete && (
@@ -724,6 +1104,25 @@ function POSApp({ onLogout }) {
             <div className="modal-actions flex gap-2">
               <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setOrderToDelete(null)}>Cancel</button>
               <button className="btn btn-danger w-full" onClick={deleteOrder}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {orderToRefund && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2 className="modal-title" style={{ color: '#f59e0b' }}>Refund Order</h2>
+            <div className="modal-body">
+              <p style={{ fontSize: '1.05rem' }}>Mark this order as refunded?</p>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                {format(parseISO(orderToRefund.date), 'MMM d, yyyy h:mm a')} — ₱{orderToRefund.total.toLocaleString()}
+              </p>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.25rem' }}>The order stays in history but is excluded from revenue.</p>
+            </div>
+            <div className="modal-actions flex gap-2">
+              <button className="btn w-full" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} onClick={() => setOrderToRefund(null)}>Cancel</button>
+              <button className="btn w-full" style={{ backgroundColor: '#f59e0b', color: '#fff', fontWeight: 700 }} onClick={confirmRefund}>Confirm Refund</button>
             </div>
           </div>
         </div>
