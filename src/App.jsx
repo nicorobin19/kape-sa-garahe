@@ -83,7 +83,7 @@ function MenuCard({ item, cart, onAdd, categoryRules }) {
         <div className="menu-list-image">
           {item.image_url
             ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Coffee size={32} opacity={0.2} />}
+            : <Coffee size={28} opacity={0.45} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--color-text)', marginBottom: '0.1rem' }}>{item.name}</div>

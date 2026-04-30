@@ -302,11 +302,11 @@ input, select, textarea {
 
 .menu-list-image {
   width: 72px;
-  height: 88px;
+  height: 72px;
   border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
-  background-color: var(--color-surface-hover);
+  background-color: rgba(13, 92, 49, 0.07);
   display: flex;
   align-items: center;
   justify-content: center;
