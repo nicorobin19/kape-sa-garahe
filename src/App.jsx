@@ -821,9 +821,61 @@ function POSApp({ onLogout }) {
     </div>
   );
 
-  const renderDailySales = () => (
+  const renderDailySales = () => {
+    const now = new Date();
+    const startOfCurrentMonth = startOfMonth(now);
+
+    const [overallMode, setOverallMode] = React.useState('month');
+
+    const overallOrders = orders.filter(o => {
+      if (o.refunded) return false;
+      if (overallMode === 'month') return parseISO(o.date) >= startOfCurrentMonth;
+      return true;
+    });
+    const overallExpenses = expenses.filter(e => {
+      if (overallMode === 'month') return parseISO(e.date) >= startOfCurrentMonth;
+      return true;
+    });
+    const overallRevenue = overallOrders.reduce((s, o) => s + o.total, 0);
+    const overallExpenseTotal = overallExpenses.reduce((s, e) => s + e.amount, 0);
+    const overallNetProfit = overallRevenue - overallExpenseTotal;
+
+    return (
     <div className="content-wrapper">
       <h2 className="title mb-4">Sales Summary</h2>
+
+      {/* Overall Running Section */}
+      <div className="card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.5rem', borderLeft: '4px solid var(--color-brand)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <span style={{ fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>Overall Performance</span>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            {['month', 'alltime'].map(m => (
+              <button key={m} onClick={() => setOverallMode(m)} style={{ padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700, border: 'none', cursor: 'pointer', backgroundColor: overallMode === m ? 'var(--color-brand)' : 'var(--color-surface-hover)', color: overallMode === m ? '#fff' : 'var(--color-text)' }}>
+                {m === 'month' ? 'This Month' : 'All Time'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+          <div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.25rem' }}>Total Revenue</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-brand)' }}>₱{overallRevenue.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.25rem' }}>Total Expenses</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-danger)' }}>-₱{overallExpenseTotal.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.25rem' }}>Net Profit</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: overallNetProfit >= 0 ? 'var(--color-brand)' : 'var(--color-danger)' }}>
+              {overallNetProfit >= 0 ? '' : '-'}₱{Math.abs(overallNetProfit).toLocaleString()}
+            </div>
+            {overallNetProfit < 0 && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-danger)', fontWeight: 600, marginTop: '0.2rem' }}>₱{Math.abs(overallNetProfit).toLocaleString()} still to recover</div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="filter-bar">
         <span className="text-muted font-bold" style={{ textTransform: 'uppercase', fontSize: '0.85rem' }}>Select Date:</span>
@@ -925,7 +977,8 @@ function POSApp({ onLogout }) {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderSalesHistory = () => (
     <div className="content-wrapper">
