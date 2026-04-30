@@ -178,6 +178,7 @@ function POSApp({ onLogout }) {
 
   // Chart State
   const [chartMode, setChartMode] = useState('weekly');
+  const [overallMode, setOverallMode] = useState('month');
 
   // Theme
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('kape_theme') === 'dark');
@@ -824,8 +825,6 @@ function POSApp({ onLogout }) {
   const renderDailySales = () => {
     const now = new Date();
     const startOfCurrentMonth = startOfMonth(now);
-
-    const [overallMode, setOverallMode] = React.useState('month');
 
     const overallOrders = orders.filter(o => {
       if (o.refunded) return false;
