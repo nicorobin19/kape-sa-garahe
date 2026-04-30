@@ -54,8 +54,13 @@ function LoginPage({ onEnter }) {
   );
 }
 
+// Categories that never show temperature options
+const NO_TEMP_CATEGORIES = ['Soda', 'Pop', 'Snacks', 'Add-ons'];
+const hasTemp = (category) => !NO_TEMP_CATEGORIES.some(c => c.toLowerCase() === category?.toLowerCase());
+
 function MenuCard({ item, cart, onAdd }) {
-  const [itemTemp, setItemTemp] = React.useState('Hot');
+  const showTemp = hasTemp(item.category);
+  const [itemTemp, setItemTemp] = React.useState('Cold');
   const [itemQty, setItemQty] = React.useState(1);
   const qtyInCart = cart.filter(i => i.id === item.id).reduce((s, i) => s + i.qty, 0);
   const btnStyle = (active) => ({
@@ -64,6 +69,7 @@ function MenuCard({ item, cart, onAdd }) {
     backgroundColor: active ? 'var(--color-text)' : 'var(--color-surface-hover)',
     color: active ? '#fff' : 'var(--color-text)',
   });
+  const effectiveTemp = showTemp ? itemTemp : null;
   return (
     <div className="menu-list-card">
       {/* Image + Name/Price */}
@@ -82,8 +88,14 @@ function MenuCard({ item, cart, onAdd }) {
       {/* Temp + Qty on same row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: '0.35rem' }}>
-          <button onClick={() => setItemTemp('Hot')} style={btnStyle(itemTemp === 'Hot')}>Hot</button>
-          <button onClick={() => setItemTemp('Cold')} style={btnStyle(itemTemp === 'Cold')}>Cold</button>
+          {showTemp ? (
+            <>
+              <button onClick={() => setItemTemp('Hot')} style={btnStyle(itemTemp === 'Hot')}>Hot</button>
+              <button onClick={() => setItemTemp('Cold')} style={btnStyle(itemTemp === 'Cold')}>Cold</button>
+            </>
+          ) : (
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>No temp</span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <button onClick={() => setItemQty(q => Math.max(1, q - 1))} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={11} /></button>
@@ -93,7 +105,7 @@ function MenuCard({ item, cart, onAdd }) {
       </div>
 
       {/* Add to Cart */}
-      <button onClick={() => { onAdd(item, itemQty, itemTemp); setItemQty(1); }} style={{ width: '100%', backgroundColor: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: '999px', padding: '0.55rem 0', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}>
+      <button onClick={() => { onAdd(item, itemQty, effectiveTemp); setItemQty(1); }} style={{ width: '100%', backgroundColor: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: '999px', padding: '0.55rem 0', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}>
         {qtyInCart > 0 ? `Added (${qtyInCart})` : 'Add to Cart'}
       </button>
     </div>
@@ -114,8 +126,11 @@ function POSApp({ onLogout }) {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [cashReceived, setCashReceived] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedTemp, setSelectedTemp] = useState('Hot');
+  const [selectedTemp, setSelectedTemp] = useState('Cold');
   const [selectedQty, setSelectedQty] = useState(1);
+  // Discount State
+  const [orderDiscount, setOrderDiscount] = useState({ type: 'percent', value: '' });
+  const [itemDiscounts, setItemDiscounts] = useState({});
 
   // Refund State
   const [orderToRefund, setOrderToRefund] = useState(null);
@@ -192,15 +207,24 @@ function POSApp({ onLogout }) {
     return orders.filter(o => isSameDay(parseISO(o.date), filterDateObj));
   }, [orders, historyFilterDate]);
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const cartSubtotal = cart.reduce((sum, item) => {
+    const itemDisc = itemDiscounts[item.cartId];
+    const itemTotal = item.price * item.qty;
+    if (!itemDisc || !itemDisc.value) return sum + itemTotal;
+    const discAmt = itemDisc.type === 'percent' ? itemTotal * (parseFloat(itemDisc.value) / 100) : parseFloat(itemDisc.value);
+    return sum + Math.max(0, itemTotal - discAmt);
+  }, 0);
+  const orderDiscountAmt = !orderDiscount.value ? 0 : orderDiscount.type === 'percent' ? cartSubtotal * (parseFloat(orderDiscount.value) / 100) : parseFloat(orderDiscount.value);
+  const cartTotal = Math.max(0, cartSubtotal - orderDiscountAmt);
   const filteredMenuItems = activeCategory === 'All' ? menuItems : menuItems.filter(m => m.category === activeCategory);
 
   // -------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------
-  const addToCart = (item, qty = 1, temp = 'Hot') => {
-    const cartId = `${item.id}-${temp}`;
-    const cartItem = { ...item, cartId, temp, name: `${item.name} (${temp})` };
+  const addToCart = (item, qty = 1, temp = null) => {
+    const cartId = `${item.id}-${temp ?? 'none'}`;
+    const displayName = temp ? `${item.name} (${temp})` : item.name;
+    const cartItem = { ...item, cartId, temp, name: displayName };
     setCart(prev => {
       const existing = prev.find(i => i.cartId === cartId);
       if (existing) return prev.map(i => i.cartId === cartId ? { ...i, qty: i.qty + qty } : i);
@@ -231,6 +255,8 @@ function POSApp({ onLogout }) {
       setCart([]);
       setPaymentMethod('Cash');
       setCashReceived('');
+      setOrderDiscount({ type: 'percent', value: '' });
+      setItemDiscounts({});
       setShowCheckoutModal(false);
     }
   };
@@ -402,29 +428,69 @@ function POSApp({ onLogout }) {
               Cart is empty
             </p>
           ) : (
-            cart.map(item => (
-              <div key={item.cartId} className="cart-item">
-                <div className="cart-item-image-placeholder" style={{ overflow: 'hidden', borderRadius: 12 }}>
-                  {item.image_url
-                    ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <Coffee size={24} />}
+            cart.map(item => {
+              const itemDisc = itemDiscounts[item.cartId];
+              const itemTotal = item.price * item.qty;
+              const discAmt = itemDisc?.value ? (itemDisc.type === 'percent' ? itemTotal * (parseFloat(itemDisc.value) / 100) : parseFloat(itemDisc.value)) : 0;
+              const discountedTotal = Math.max(0, itemTotal - discAmt);
+              return (
+              <div key={item.cartId} className="cart-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div className="cart-item-image-placeholder" style={{ overflow: 'hidden', borderRadius: 12 }}>
+                    {item.image_url
+                      ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Coffee size={24} />}
+                  </div>
+                  <div className="cart-item-info">
+                    <div className="cart-item-name">{item.name}</div>
+                    <div className="cart-item-price">
+                      {discAmt > 0 ? <><span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>₱{itemTotal.toLocaleString()}</span> <span style={{ color: 'var(--color-brand)', fontWeight: 700 }}>₱{discountedTotal.toLocaleString()}</span></> : `₱${item.price} x ${item.qty}`}
+                    </div>
+                  </div>
+                  <div className="cart-item-controls">
+                    <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, -1)}><Minus size={14} /></button>
+                    <span className="cart-qty">{item.qty}</span>
+                    <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, 1)}><Plus size={14} /></button>
+                  </div>
                 </div>
-                <div className="cart-item-info">
-                  <div className="cart-item-name">{item.name}</div>
-                  <div className="cart-item-price">₱{item.price} x {item.qty}</div>
-                </div>
-                <div className="cart-item-controls">
-                  <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, -1)}><Minus size={14} /></button>
-                  <span className="cart-qty">{item.qty}</span>
-                  <button className="cart-qty-btn" onClick={() => updateCartQty(item.cartId, 1)}><Plus size={14} /></button>
+                {/* Item discount row */}
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', paddingLeft: '0.25rem' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>Item disc:</span>
+                  <select value={itemDiscounts[item.cartId]?.type || 'percent'} onChange={e => setItemDiscounts(prev => ({ ...prev, [item.cartId]: { ...prev[item.cartId], type: e.target.value, value: prev[item.cartId]?.value || '' } }))} style={{ fontSize: '0.72rem', padding: '0.1rem 0.25rem', borderRadius: 6, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                    <option value="percent">%</option>
+                    <option value="fixed">₱</option>
+                  </select>
+                  <input type="number" min="0" placeholder="0" value={itemDiscounts[item.cartId]?.value || ''} onChange={e => setItemDiscounts(prev => ({ ...prev, [item.cartId]: { type: prev[item.cartId]?.type || 'percent', value: e.target.value } }))} style={{ width: 48, fontSize: '0.72rem', padding: '0.1rem 0.35rem', borderRadius: 6, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} />
+                  {itemDisc?.value && <span style={{ fontSize: '0.72rem', color: 'var(--color-brand)', fontWeight: 700 }}>-₱{discAmt.toFixed(2)}</span>}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
 
         <div className="cart-footer">
+          {/* Order-level discount */}
+          {cart.length > 0 && (
+            <div style={{ marginBottom: '0.75rem', padding: '0.6rem 0.75rem', backgroundColor: 'var(--color-surface-hover)', borderRadius: 12 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: '0.4rem' }}>ORDER DISCOUNT</div>
+              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                <select value={orderDiscount.type} onChange={e => setOrderDiscount(d => ({ ...d, type: e.target.value }))} style={{ fontSize: '0.8rem', padding: '0.25rem 0.4rem', borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)', fontWeight: 600 }}>
+                  <option value="percent">% Off</option>
+                  <option value="fixed">₱ Off</option>
+                </select>
+                <input type="number" min="0" placeholder="0" value={orderDiscount.value} onChange={e => setOrderDiscount(d => ({ ...d, value: e.target.value }))} style={{ flex: 1, fontSize: '0.8rem', padding: '0.25rem 0.5rem', borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }} />
+                {orderDiscount.value && <span style={{ fontSize: '0.8rem', color: 'var(--color-danger)', fontWeight: 700, whiteSpace: 'nowrap' }}>-₱{orderDiscountAmt.toFixed(2)}</span>}
+              </div>
+            </div>
+          )}
           <div className="cart-total-row">
+            {cartSubtotal !== cartTotal && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Subtotal</span>
+                <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>₱{cartSubtotal.toLocaleString()}</span>
+              </div>
+            )}
             <span className="cart-total-label">Total Amount</span>
             <span className="cart-total-value">₱{cartTotal.toLocaleString()}</span>
           </div>
