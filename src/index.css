@@ -199,44 +199,21 @@ input, select, textarea {
 
 /* Category Pills */
 .category-filters-wrapper {
-  position: relative;
   margin-bottom: 2rem;
-  overflow: hidden;
-}
-
-.category-filters-wrapper::before,
-.category-filters-wrapper::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 8px;
-  width: 48px;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.category-filters-wrapper::before {
-  left: 0;
-  background: linear-gradient(to right, var(--color-bg) 20%, transparent);
-}
-
-.category-filters-wrapper::after {
-  right: 0;
-  background: linear-gradient(to left, var(--color-bg) 20%, transparent);
 }
 
 .category-filters {
   display: flex;
   gap: 1rem;
-  overflow-x: scroll;
-  padding-bottom: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.6rem;
   padding-left: 0.25rem;
   padding-right: 0.25rem;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   cursor: grab;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 .category-filters:active {
@@ -244,7 +221,16 @@ input, select, textarea {
 }
 
 .category-filters::-webkit-scrollbar {
-  display: none;
+  height: 3px;
+}
+
+.category-filters::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.category-filters::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 999px;
 }
 
 .category-pill {
