@@ -438,6 +438,15 @@ function POSApp({ onLogout }) {
     }
   };
 
+  const categoryScrollRef = React.useRef(null);
+
+  const handleCategoryWheel = (e) => {
+    if (categoryScrollRef.current) {
+      e.preventDefault();
+      categoryScrollRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
   // -------------------------------------------------------------
   // Views
   // -------------------------------------------------------------
@@ -445,7 +454,11 @@ function POSApp({ onLogout }) {
     <div className="pos-layout">
       <div className="pos-menu-area">
         <div className="category-filters-wrapper">
-          <div className="category-filters">
+          <div
+            className="category-filters"
+            ref={categoryScrollRef}
+            onWheel={handleCategoryWheel}
+          >
             {categories.map(cat => {
               const itemCount = cat === 'All' ? menuItems.length : menuItems.filter(m => m.category === cat).length;
               return (
