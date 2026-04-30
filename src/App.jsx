@@ -268,6 +268,8 @@ function POSApp({ onLogout }) {
       id: uuidv4(),
       date: new Date().toISOString(),
       items: cart,
+      subtotal: cartSubtotal,
+      discount_amount: parseFloat((cartSubtotal - cartTotal).toFixed(2)),
       total: cartTotal,
       payment_method: paymentMethod,
       refunded: false,
@@ -853,6 +855,10 @@ function POSApp({ onLogout }) {
           <div className="value" style={{ color: summaryRevenue - summaryExpenses >= 0 ? 'var(--color-brand)' : 'var(--color-danger)' }}>₱{(summaryRevenue - summaryExpenses).toLocaleString()}</div>
         </div>
         <div className="summary-card">
+          <div className="label">🏷️ Total Discounts</div>
+          <div className="value" style={{ color: 'var(--color-danger)' }}>-₱{summaryOrders.filter(o => !o.refunded).reduce((s, o) => s + (o.discount_amount || 0), 0).toLocaleString()}</div>
+        </div>
+        <div className="summary-card">
           <div className="label">💵 Cash on Hand</div>
           <div className="value" style={{ color: 'var(--color-text)' }}>₱{summaryCashRevenue.toLocaleString()}</div>
         </div>
@@ -874,6 +880,7 @@ function POSApp({ onLogout }) {
                   <th>Time of Order</th>
                   <th>Purchased Items</th>
                   <th className="text-center">Payment</th>
+                  <th className="text-right">Discount</th>
                   <th className="text-right">Order Total</th>
                   <th></th>
                 </tr>
@@ -893,8 +900,18 @@ function POSApp({ onLogout }) {
                         </button>
                       )}
                     </td>
+                    <td className="text-right" style={{ fontSize: '0.85rem' }}>
+                      {order.discount_amount > 0
+                        ? <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>-₱{order.discount_amount.toLocaleString()}</span>
+                        : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                    </td>
                     <td className="text-right font-bold text-brand">
-                      {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : `₱${order.total.toLocaleString()}`}
+                      {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : (
+                        <div>
+                          {order.discount_amount > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>₱{(order.subtotal ?? order.total).toLocaleString()}</div>}
+                          ₱{order.total.toLocaleString()}
+                        </div>
+                      )}
                     </td>
                     <td className="text-right" style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
                       {!order.refunded && <button className="btn-icon" onClick={() => setOrderToRefund(order)} title="Refund"><img src="/refund.png" alt="Refund" style={{ width: 20, height: 20 }} /></button>}
@@ -936,6 +953,7 @@ function POSApp({ onLogout }) {
                   <th>Order Details</th>
                   <th className="text-center">Total Quantity</th>
                   <th className="text-center">Payment</th>
+                  <th className="text-right">Discount</th>
                   <th className="text-right">Revenue</th>
                   <th></th>
                 </tr>
@@ -970,8 +988,18 @@ function POSApp({ onLogout }) {
                           </button>
                         )}
                       </td>
+                      <td className="text-right" style={{ fontSize: '0.85rem' }}>
+                        {order.discount_amount > 0
+                          ? <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>-₱{order.discount_amount.toLocaleString()}</span>
+                          : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                      </td>
                       <td className="text-right font-bold text-brand" style={{ fontSize: '1.1rem' }}>
-                        {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : `₱${order.total.toLocaleString()}`}
+                        {order.refunded ? <span style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 700 }}>REFUNDED</span> : (
+                          <div>
+                            {order.discount_amount > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>₱{(order.subtotal ?? order.total).toLocaleString()}</div>}
+                            ₱{order.total.toLocaleString()}
+                          </div>
+                        )}
                       </td>
                       <td className="text-right" style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
                         {!order.refunded && <button className="btn-icon" onClick={() => setOrderToRefund(order)} title="Refund"><img src="/refund.png" alt="Refund" style={{ width: 20, height: 20 }} /></button>}
