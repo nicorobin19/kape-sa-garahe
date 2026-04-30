@@ -444,20 +444,22 @@ function POSApp({ onLogout }) {
   const renderPOS = () => (
     <div className="pos-layout">
       <div className="pos-menu-area">
-        <div className="category-filters">
-          {categories.map(cat => {
-            const itemCount = cat === 'All' ? menuItems.length : menuItems.filter(m => m.category === cat).length;
-            return (
-              <button
-                key={cat}
-                className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                <div>{cat}</div>
-                <div className="category-pill-count">{itemCount} items</div>
-              </button>
-            );
-          })}
+        <div className="category-filters-wrapper">
+          <div className="category-filters">
+            {categories.map(cat => {
+              const itemCount = cat === 'All' ? menuItems.length : menuItems.filter(m => m.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(cat)}
+                >
+                  <div>{cat}</div>
+                  <div className="category-pill-count">{itemCount} items</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {filteredMenuItems.length === 0 ? (

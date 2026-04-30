@@ -197,13 +197,46 @@ input, select, textarea {
   overflow: hidden;
 }
 
-/* Category Pills (Match Reference Cards) */
+/* Category Pills */
+.category-filters-wrapper {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.category-filters-wrapper::before,
+.category-filters-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 8px;
+  width: 48px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.category-filters-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--color-bg), transparent);
+}
+
+.category-filters-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--color-bg), transparent);
+}
+
 .category-filters {
   display: flex;
   gap: 1rem;
-  margin-bottom: 2rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-filters::-webkit-scrollbar {
+  display: none;
 }
 
 .category-pill {
