@@ -306,7 +306,7 @@ input, select, textarea {
   border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
-  background-color: rgba(13, 92, 49, 0.07);
+  background-color: var(--color-surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
