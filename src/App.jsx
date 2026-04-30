@@ -393,7 +393,6 @@ function POSApp({ onLogout }) {
         }
         return item;
       });
-      // Merge duplicates that now share the same cartId after temp removal
       const merged = [];
       updated.forEach(item => {
         const existing = merged.find(i => i.cartId === item.cartId);
@@ -403,6 +402,8 @@ function POSApp({ onLogout }) {
       return merged;
     });
   }, [menuItems]);
+
+  const confirmRenameCategory = async () => {
     if (!renamingCategory || !renameValue.trim()) return;
     const { error } = await supabase.from('menu_items').update({ category: renameValue.trim() }).eq('category', renamingCategory);
     if (!error) {
