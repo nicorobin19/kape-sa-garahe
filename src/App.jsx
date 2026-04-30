@@ -54,9 +54,20 @@ function LoginPage({ onEnter }) {
   );
 }
 
-// Categories that never show temperature options
-const NO_TEMP_CATEGORIES = ['Soda', 'Pop', 'Snacks', 'Add-ons'];
-const hasTemp = (category) => !NO_TEMP_CATEGORIES.some(c => c.toLowerCase() === category?.toLowerCase());
+// Category rules — add any category here to control temperature behaviour
+const CATEGORY_RULES = {
+  'Soda':      { allowTemperature: false },
+  'Pop':       { allowTemperature: false },
+  'Snacks':    { allowTemperature: false },
+  'Add-ons':   { allowTemperature: false },
+  'Coffee':    { allowTemperature: true  },
+  'Non-Coffee':{ allowTemperature: true  },
+};
+// Returns true if the category allows temperature, defaults to true for unknown categories
+const hasTemp = (category) => {
+  const rule = CATEGORY_RULES[category];
+  return rule ? rule.allowTemperature : true;
+};
 
 function MenuCard({ item, cart, onAdd }) {
   const showTemp = hasTemp(item.category);
@@ -372,7 +383,26 @@ function POSApp({ onLogout }) {
     }
   };
 
-  const confirmRenameCategory = async () => {
+  // Auto-remove temperature from cart items whose category disallows it
+  useEffect(() => {
+    setCart(prev => {
+      const updated = prev.map(item => {
+        if (!hasTemp(item.category) && item.temp) {
+          const baseName = item.name.replace(/ \((Hot|Cold)\)$/, '');
+          return { ...item, temp: null, name: baseName, cartId: `${item.id}-none` };
+        }
+        return item;
+      });
+      // Merge duplicates that now share the same cartId after temp removal
+      const merged = [];
+      updated.forEach(item => {
+        const existing = merged.find(i => i.cartId === item.cartId);
+        if (existing) existing.qty += item.qty;
+        else merged.push({ ...item });
+      });
+      return merged;
+    });
+  }, [menuItems]);
     if (!renamingCategory || !renameValue.trim()) return;
     const { error } = await supabase.from('menu_items').update({ category: renameValue.trim() }).eq('category', renamingCategory);
     if (!error) {
@@ -684,7 +714,10 @@ function POSApp({ onLogout }) {
                       {item.image_url ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Coffee size={18} color="var(--color-brand)" opacity={0.5} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-text)' }}>{item.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {item.name}
+                        {!hasTemp(item.category) && <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '999px', backgroundColor: '#f0f0f0', color: '#888' }}>No Temp</span>}
+                      </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{item.category}</div>
                     </div>
                     <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-brand)', minWidth: 60, textAlign: 'right' }}>₱{item.price}</div>
