@@ -398,10 +398,9 @@ function POSApp({ onLogout }) {
 
   const confirmDeleteCategory = async () => {
     if (!categoryToDelete) return;
-    // Move items to Uncategorized instead of deleting them
-    const { error } = await supabase.from('menu_items').update({ category: 'Uncategorized' }).eq('category', categoryToDelete);
+    const { error } = await supabase.from('menu_items').delete().eq('category', categoryToDelete);
     if (!error) {
-      setMenuItems(prev => prev.map(m => m.category === categoryToDelete ? { ...m, category: 'Uncategorized' } : m));
+      setMenuItems(prev => prev.filter(m => m.category !== categoryToDelete));
       if (mmActiveCategory === categoryToDelete) setMmActiveCategory('');
       setCategoryToDelete(null);
     }
@@ -851,7 +850,7 @@ function POSApp({ onLogout }) {
             <div className="modal-body">
               <p style={{ fontSize: '1.05rem' }}>Delete the <strong>{categoryToDelete}</strong> category?</p>
               <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                The <strong>{menuItems.filter(m => m.category === categoryToDelete).length} item(s)</strong> in this category will be moved to <strong>Uncategorized</strong> — they will not be deleted.
+                This will also permanently delete all <strong>{menuItems.filter(m => m.category === categoryToDelete).length} item(s)</strong> under this category. This cannot be undone.
               </p>
             </div>
             <div className="modal-actions flex gap-2">
