@@ -640,54 +640,48 @@ function POSApp({ onLogout }) {
       </div>
 
       {/* Category Cards */}
-      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.5rem', flexShrink: 0, scrollbarWidth: 'none' }}>
+      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '0.25rem', flexShrink: 0, scrollbarWidth: 'none' }}>
         {/* All card */}
         <div
           onClick={() => { setMmActiveCategory(''); setOpenCategoryMenu(null); }}
-          style={{ flexShrink: 0, width: 120, borderRadius: 14, border: `1.5px solid ${mmActiveCategory === '' ? 'var(--color-brand)' : 'var(--color-border)'}`, backgroundColor: mmActiveCategory === '' ? 'var(--color-brand)' : 'var(--color-surface)', padding: '0.65rem 0.75rem', cursor: 'pointer', transition: 'all 0.15s' }}
+          style={{ flexShrink: 0, minWidth: 90, borderRadius: 12, border: `1.5px solid ${mmActiveCategory === '' ? 'var(--color-brand)' : 'var(--color-border)'}`, backgroundColor: mmActiveCategory === '' ? 'var(--color-brand)' : 'var(--color-surface)', padding: '0.5rem 0.85rem', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}
         >
-          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: mmActiveCategory === '' ? '#fff' : 'var(--color-text)', marginBottom: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>All</div>
-          <div style={{ fontSize: '0.75rem', color: mmActiveCategory === '' ? 'rgba(255,255,255,0.75)' : 'var(--color-text-muted)', fontWeight: 600 }}>{menuItems.length} items</div>
+          <span style={{ fontWeight: 700, fontSize: '0.85rem', color: mmActiveCategory === '' ? '#fff' : 'var(--color-text)', whiteSpace: 'nowrap' }}>All</span>
+          <span style={{ fontSize: '0.72rem', color: mmActiveCategory === '' ? 'rgba(255,255,255,0.75)' : 'var(--color-text-muted)', fontWeight: 600 }}>{menuItems.length} items</span>
         </div>
 
         {dropdownCategories.map(cat => {
           const count = menuItems.filter(m => m.category === cat).length;
           const isActive = mmActiveCategory === cat;
-          const menuOpen = openCategoryMenu === cat;
           const tempOn = hasTemp(cat);
           const locked = BASE_CATEGORY_RULES[cat]?.allowTemperature === false;
           return (
-            <div key={cat} style={{ flexShrink: 0, width: 130, borderRadius: 14, border: `1.5px solid ${isActive ? 'var(--color-brand)' : 'var(--color-border)'}`, backgroundColor: isActive ? 'var(--color-brand)' : 'var(--color-surface)', padding: '0.65rem 0.75rem', cursor: 'pointer', transition: 'all 0.15s', position: 'relative' }} onClick={() => { setMmActiveCategory(cat); setOpenCategoryMenu(null); }}>
-              <div style={{ fontWeight: 700, fontSize: '0.85rem', color: isActive ? '#fff' : 'var(--color-text)', marginBottom: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat}</div>
-              <div style={{ fontSize: '0.75rem', color: isActive ? 'rgba(255,255,255,0.75)' : 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.5rem' }}>{count} items</div>
-              {/* Bottom row: temp + kebab */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={e => e.stopPropagation()}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: isActive ? 'rgba(255,255,255,0.8)' : (tempOn ? 'var(--color-brand)' : 'var(--color-text-muted)') }}>
-                  {locked ? '—' : (tempOn ? '🌡️ Hot/Cold' : 'No temp')}
-                </span>
-                <button
-                  onClick={e => { e.stopPropagation(); setOpenCategoryMenu(menuOpen ? null : cat); }}
-                  style={{ background: isActive ? 'rgba(255,255,255,0.15)' : 'var(--color-surface-hover)', border: 'none', borderRadius: 6, padding: '0.15rem 0.4rem', cursor: 'pointer', fontSize: '0.9rem', color: isActive ? '#fff' : 'var(--color-text-muted)', lineHeight: 1, fontWeight: 700 }}
-                >⋮</button>
+            <div key={cat} style={{ flexShrink: 0, minWidth: 130, maxWidth: 160, borderRadius: 12, border: `1.5px solid ${isActive ? 'var(--color-brand)' : 'var(--color-border)'}`, backgroundColor: isActive ? 'var(--color-brand)' : 'var(--color-surface)', padding: '0.5rem 0.75rem', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+              {/* Top: name + count — clickable */}
+              <div onClick={() => { setMmActiveCategory(cat); setOpenCategoryMenu(null); }} style={{ cursor: 'pointer' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: isActive ? '#fff' : 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat}</div>
+                <div style={{ fontSize: '0.72rem', color: isActive ? 'rgba(255,255,255,0.75)' : 'var(--color-text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>{count} items{!locked && (tempOn ? ' · 🌡️' : ' · no temp')}</div>
               </div>
-              {/* Kebab dropdown */}
-              {menuOpen && (
-                <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, boxShadow: 'var(--shadow-md)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
-                  <button onClick={() => { setRenamingCategory(cat); setRenameValue(cat); setOpenCategoryMenu(null); }} style={{ width: '100%', textAlign: 'left', padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Edit size={13} /> Rename
-                  </button>
-                  {!locked && (
-                    <button onClick={() => { toggleCategoryTemp(cat); setOpenCategoryMenu(null); }} style={{ width: '100%', textAlign: 'left', padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 600, color: tempOn ? 'var(--color-brand)' : 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      🌡️ {tempOn ? 'Disable Hot/Cold' : 'Enable Hot/Cold'}
-                    </button>
-                  )}
-                  <div style={{ borderTop: '1px solid var(--color-border)' }}>
-                    <button onClick={() => { setCategoryToDelete(cat); setOpenCategoryMenu(null); }} style={{ width: '100%', textAlign: 'left', padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Trash2 size={13} /> Delete
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Bottom: action buttons always visible */}
+              <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setRenamingCategory(cat); setRenameValue(cat); }}
+                  title="Rename"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', padding: '0.25rem 0', borderRadius: 7, border: `1px solid ${isActive ? 'rgba(255,255,255,0.3)' : 'var(--color-border)'}`, background: isActive ? 'rgba(255,255,255,0.12)' : 'var(--color-bg)', color: isActive ? '#fff' : 'var(--color-text-muted)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                ><Edit size={10} /> Edit</button>
+                {!locked && (
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleCategoryTemp(cat); }}
+                    title={tempOn ? 'Disable Hot/Cold' : 'Enable Hot/Cold'}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0.4rem', borderRadius: 7, border: `1px solid ${isActive ? 'rgba(255,255,255,0.3)' : 'var(--color-border)'}`, background: isActive ? 'rgba(255,255,255,0.12)' : 'var(--color-bg)', color: isActive ? (tempOn ? '#fff' : 'rgba(255,255,255,0.5)') : (tempOn ? 'var(--color-brand)' : 'var(--color-text-muted)'), fontSize: '0.75rem', cursor: 'pointer' }}
+                  >🌡️</button>
+                )}
+                <button
+                  onClick={e => { e.stopPropagation(); setCategoryToDelete(cat); }}
+                  title="Delete"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0.4rem', borderRadius: 7, border: `1px solid ${isActive ? 'rgba(255,255,255,0.3)' : 'var(--color-border)'}`, background: isActive ? 'rgba(255,255,255,0.12)' : 'var(--color-bg)', color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--color-danger)', fontSize: '0.7rem', cursor: 'pointer' }}
+                ><Trash2 size={10} /></button>
+              </div>
             </div>
           );
         })}
