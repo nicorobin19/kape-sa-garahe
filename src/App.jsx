@@ -54,23 +54,19 @@ function LoginPage({ onEnter }) {
   );
 }
 
-// Category rules — add any category here to control temperature behaviour
-const CATEGORY_RULES = {
-  'Soda':      { allowTemperature: false },
-  'Pop':       { allowTemperature: false },
-  'Snacks':    { allowTemperature: false },
-  'Add-ons':   { allowTemperature: false },
-  'Coffee':    { allowTemperature: true  },
-  'Non-Coffee':{ allowTemperature: true  },
-};
-// Returns true if the category allows temperature, defaults to true for unknown categories
-const hasTemp = (category) => {
-  const rule = CATEGORY_RULES[category];
-  return rule ? rule.allowTemperature : true;
+// Hardcoded base rules — these always apply regardless of user settings
+const BASE_CATEGORY_RULES = {
+  'Soda':       { allowTemperature: false },
+  'Pop':        { allowTemperature: false },
+  'Snacks':     { allowTemperature: false },
+  'Add-ons':    { allowTemperature: false },
+  'Coffee':     { allowTemperature: true  },
+  'Non-Coffee': { allowTemperature: true  },
 };
 
-function MenuCard({ item, cart, onAdd }) {
-  const showTemp = hasTemp(item.category);
+function MenuCard({ item, cart, onAdd, categoryRules }) {
+  const rule = categoryRules[item.category];
+  const showTemp = rule ? rule.allowTemperature : false;
   const [itemTemp, setItemTemp] = React.useState('Cold');
   const [itemQty, setItemQty] = React.useState(1);
   const qtyInCart = cart.filter(i => i.id === item.id).reduce((s, i) => s + i.qty, 0);
@@ -83,7 +79,6 @@ function MenuCard({ item, cart, onAdd }) {
   const effectiveTemp = showTemp ? itemTemp : null;
   return (
     <div className="menu-list-card">
-      {/* Image + Name/Price */}
       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
         <div className="menu-list-image">
           {item.image_url
@@ -95,8 +90,6 @@ function MenuCard({ item, cart, onAdd }) {
           <div style={{ fontWeight: 800, color: 'var(--color-brand)', fontSize: '0.95rem' }}>₱{item.price}</div>
         </div>
       </div>
-
-      {/* Temp + Qty on same row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: '0.35rem' }}>
           {showTemp ? (
@@ -114,8 +107,6 @@ function MenuCard({ item, cart, onAdd }) {
           <button onClick={() => setItemQty(q => q + 1)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={11} /></button>
         </div>
       </div>
-
-      {/* Add to Cart */}
       <button onClick={() => { onAdd(item, itemQty, effectiveTemp); setItemQty(1); }} style={{ width: '100%', backgroundColor: 'var(--color-brand)', color: '#fff', border: 'none', borderRadius: '999px', padding: '0.55rem 0', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.2s' }}>
         {qtyInCart > 0 ? `Added (${qtyInCart})` : 'Add to Cart'}
       </button>
@@ -159,6 +150,27 @@ function POSApp({ onLogout }) {
   const [renamingCategory, setRenamingCategory] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [newCategoryAllowTemp, setNewCategoryAllowTemp] = useState(false);
+  // Dynamic category rules — persisted in localStorage
+  const [categoryRules, setCategoryRules] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kape_category_rules');
+      return saved ? { ...BASE_CATEGORY_RULES, ...JSON.parse(saved) } : { ...BASE_CATEGORY_RULES };
+    } catch { return { ...BASE_CATEGORY_RULES }; }
+  });
+  const hasTemp = (category) => {
+    const rule = categoryRules[category];
+    return rule ? rule.allowTemperature : false;
+  };
+  const toggleCategoryTemp = (cat) => {
+    // Base rules for Soda/Pop/Snacks/Add-ons cannot be overridden
+    if (BASE_CATEGORY_RULES[cat]?.allowTemperature === false) return;
+    setCategoryRules(prev => {
+      const updated = { ...prev, [cat]: { allowTemperature: !prev[cat]?.allowTemperature } };
+      localStorage.setItem('kape_category_rules', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Filters State
   const [historyFilterDate, setHistoryFilterDate] = useState('');
@@ -318,6 +330,15 @@ function POSApp({ onLogout }) {
     setMenuImageFile(null);
     setMenuImagePreview(null);
     setIsAddingNewCategory(false);
+    // Register new category rule if it doesn't exist yet
+    if (menuForm.category && !categoryRules[menuForm.category]) {
+      setCategoryRules(prev => {
+        const updated = { ...prev, [menuForm.category]: { allowTemperature: newCategoryAllowTemp } };
+        localStorage.setItem('kape_category_rules', JSON.stringify(updated));
+        return updated;
+      });
+    }
+    setNewCategoryAllowTemp(false);
   };
 
   const editMenuItem = (item) => {
@@ -401,7 +422,7 @@ function POSApp({ onLogout }) {
       });
       return merged;
     });
-  }, [menuItems]);
+  }, [categoryRules]);
 
   const confirmRenameCategory = async () => {
     if (!renamingCategory || !renameValue.trim()) return;
@@ -441,7 +462,7 @@ function POSApp({ onLogout }) {
         ) : (
           <div className="menu-list">
             {filteredMenuItems.map(item => (
-              <MenuCard key={item.id} item={item} cart={cart} onAdd={addToCart} />
+              <MenuCard key={item.id} item={item} cart={cart} onAdd={addToCart} categoryRules={categoryRules} />
             ))}
           </div>
         )}
@@ -611,6 +632,10 @@ function POSApp({ onLogout }) {
                 <span style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : 'var(--color-surface-hover)', color: isActive ? '#fff' : 'var(--color-brand)', borderRadius: '999px', padding: '0.05rem 0.45rem', fontSize: '0.75rem', fontWeight: 800 }}>{count}</span>
               </button>
               <button onClick={e => { e.stopPropagation(); setRenamingCategory(cat); setRenameValue(cat); }} title="Rename" style={{ padding: '0.45rem 0.35rem', background: 'none', border: 'none', borderLeft: `1px solid ${isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)'}`, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Edit size={11} /></button>
+              {/* Temp toggle — locked for base no-temp categories */}
+              {BASE_CATEGORY_RULES[cat]?.allowTemperature !== false && (
+                <button onClick={e => { e.stopPropagation(); toggleCategoryTemp(cat); }} title={hasTemp(cat) ? 'Disable Hot/Cold' : 'Enable Hot/Cold'} style={{ padding: '0.45rem 0.35rem', background: 'none', border: 'none', borderLeft: `1px solid ${isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)'}`, color: hasTemp(cat) ? (isActive ? '#fff' : 'var(--color-brand)') : (isActive ? 'rgba(255,255,255,0.5)' : 'var(--color-text-muted)'), cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '0.7rem', fontWeight: 700 }}>{hasTemp(cat) ? '🌡️' : '—'}</button>
+              )}
               <button onClick={e => { e.stopPropagation(); setCategoryToDelete(cat); }} title="Delete category" style={{ padding: '0.45rem 0.5rem 0.45rem 0.35rem', background: 'none', border: 'none', color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--color-danger)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Trash2 size={11} /></button>
             </div>
           );
@@ -662,9 +687,17 @@ function POSApp({ onLogout }) {
                   )}
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <input type="text" className="form-control" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} placeholder="New category name..." required autoFocus style={{ fontSize: '0.9rem', padding: '0.65rem 0.85rem' }} />
-                  <button type="button" className="btn" style={{ backgroundColor: 'var(--color-surface-hover)', padding: '0.65rem 1rem', fontSize: '0.85rem' }} onClick={() => { setIsAddingNewCategory(false); setMenuForm({ ...menuForm, category: dropdownCategories[0] || 'Coffee' }); setShowCategoryDropdown(false); }}>Cancel</button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="flex gap-2">
+                    <input type="text" className="form-control" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} placeholder="New category name..." required autoFocus style={{ fontSize: '0.9rem', padding: '0.65rem 0.85rem' }} />
+                    <button type="button" className="btn" style={{ backgroundColor: 'var(--color-surface-hover)', padding: '0.65rem 1rem', fontSize: '0.85rem' }} onClick={() => { setIsAddingNewCategory(false); setMenuForm({ ...menuForm, category: dropdownCategories[0] || 'Coffee' }); setShowCategoryDropdown(false); }}>Cancel</button>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                    <div onClick={() => setNewCategoryAllowTemp(v => !v)} style={{ width: 36, height: 20, borderRadius: 999, backgroundColor: newCategoryAllowTemp ? 'var(--color-brand)' : 'var(--color-border)', position: 'relative', transition: 'background 0.2s', cursor: 'pointer', flexShrink: 0 }}>
+                      <div style={{ position: 'absolute', top: 2, left: newCategoryAllowTemp ? 18 : 2, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', transition: 'left 0.2s' }} />
+                    </div>
+                    Allow Hot/Cold for this category
+                  </label>
                 </div>
               )}
             </div>
